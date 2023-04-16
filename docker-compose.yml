@@ -1,0 +1,133 @@
+version: "3.8"
+services:
+  db:
+    image: postgres
+    container_name: db
+    environment:
+      - POSTGRESQL_ROOT_USERNAME=postgres
+      - POSTGRESQL_ROOT_PASSWORD=Romain23@
+      - POSTGRESQL_DATABASE=lib-manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql
+    restart: always
+    networks:
+      - ms-network
+
+  server:
+    image: server
+    container_name: server
+    build: ./server
+    environment:
+      eureka.instance.hostname: server
+      eureka.client.serviceUrl.defaultZone: http://server:8761/eureka/
+    expose:
+      - 8761
+    ports:
+      - 8761:8761
+    restart: always
+    networks:
+      - ms-network
+
+
+  gateway:
+    image: gateway
+    build: ./gateway
+    container_name: gateway
+    networks:
+      - ms-network
+    environment:
+      eureka.client.serviceUrl.defaultZone: http://server:8761/eureka/
+    depends_on:
+      - server
+    expose:
+      - 9191
+    ports:
+      - 9191:9191
+    restart: unless-stopped
+
+  books:
+    container_name: books
+    depends_on:
+      - db
+      - server
+      - gateway
+    image: books
+    build: ./books
+    networks:
+      - ms-network
+    expose:
+      - 9001
+    restart: on-failure
+    ports:
+      - 9001:9001
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/lib-manager
+      eureka.client.serviceUrl.defaultZone: http://server:8761/eureka/
+
+  loan:
+    container_name: loan
+    depends_on:
+      - db
+      - server
+      - gateway
+    image: loan
+    build: ./loan
+    networks:
+      - ms-network
+    expose:
+      - 9002
+    ports:
+      - 9002:9002
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/lib-manager
+      eureka.client.serviceUrl.defaultZone: http://server:8761/eureka/
+    restart: unless-stopped
+
+  reader:
+    container_name: reader
+    depends_on:
+      - db
+      - server
+      - gateway
+    image: reader
+    build: ./reader
+    restart: unless-stopped
+    networks:
+      - ms-network
+    environment:
+      eureka.client.serviceUrl.defaultZone: http://server:8761/eureka/
+
+    expose:
+      - 9003
+    ports:
+      - 9003:9003
+
+  client:
+    container_name: client
+    depends_on:
+      - server
+      - gateway
+      - books
+      - loan
+      - reader
+    image: client
+    build: ./client
+    restart: unless-stopped
+    networks:
+      - ms-network
+    environment:
+      eureka.client.serviceUrl.defaultZone: http://server:8761/eureka/
+
+    expose:
+      - 9000
+    ports:
+      - 9000:9000
+
+networks:
+  ms-network:
+    name: ms-network
+    driver: bridge
+volumes:
+  dbdata:
